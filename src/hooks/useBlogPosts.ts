@@ -29,28 +29,39 @@ export function useBlogPosts() {
     
     const unsubscribe = onSnapshot(q, 
       async (snapshot) => {
-        const newPosts = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt.toDate().toISOString()
-        } as BlogPost));
+        try {
+          const newPosts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt.toDate().toISOString()
+          } as BlogPost));
 
-        // Fetch authors for all posts
-        const authorIds = [...new Set(newPosts.map(post => post.authorId))];
-        const authorData: { [key: string]: User } = {};
-        
-        await Promise.all(
-          authorIds.map(async (authorId) => {
-            const authorDoc = await getDoc(doc(db, 'users', authorId));
-            if (authorDoc.exists()) {
-              authorData[authorId] = authorDoc.data() as User;
-            }
-          })
-        );
+          // Fetch authors for all posts
+          const authorIds = [...new Set(newPosts.map(post => post.authorId).filter(Boolean))];
+          const authorData: { [key: string]: User } = {};
+          
+          await Promise.all(
+            authorIds.map(async (authorId) => {
+              try {
+                const authorDoc = await getDoc(doc(db, 'users', authorId));
+                if (authorDoc.exists()) {
+                  authorData[authorId] = authorDoc.data() as User;
+                }
+              } catch (err) {
+                console.error(`Error fetching author ${authorId}:`, err);
+              }
+            })
+          );
 
-        setAuthors(authorData);
-        setPosts(newPosts);
-        setLoading(false);
+          setAuthors(authorData);
+          setPosts(newPosts);
+          setLoading(false);
+          setError(null);
+        } catch (err) {
+          console.error('Error processing posts:', err);
+          setError('Failed to process posts');
+          setLoading(false);
+        }
       },
       (err) => {
         console.error('Error fetching posts:', err);
@@ -63,7 +74,7 @@ export function useBlogPosts() {
   }, []);
 
   const addPost = async (post: Omit<BlogPost, 'id' | 'authorId'>) => {
-    if (!user) throw new Error('Must be logged in to add posts');
+    if (!user?.email) throw new Error('Must be logged in to add posts');
     
     try {
       await addDoc(collection(db, 'posts'), {
@@ -79,6 +90,8 @@ export function useBlogPosts() {
   };
 
   const deletePost = async (postId: string) => {
+    if (!user?.email) throw new Error('Must be logged in to delete posts');
+
     try {
       await deleteDoc(doc(db, 'posts', postId));
     } catch (err) {
@@ -88,6 +101,8 @@ export function useBlogPosts() {
   };
 
   const updatePost = async (postId: string, updates: Partial<BlogPost>) => {
+    if (!user?.email) throw new Error('Must be logged in to update posts');
+
     try {
       await updateDoc(doc(db, 'posts', postId), updates);
     } catch (err) {
@@ -97,12 +112,21 @@ export function useBlogPosts() {
   };
 
   const toggleReaction = async (postId: string, emoji: string) => {
+    if (!clientId) {
+      console.error('No client ID available');
+      return;
+    }
+
     try {
       const postRef = doc(db, 'posts', postId);
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
+      const postDoc = await getDoc(postRef);
+      
+      if (!postDoc.exists()) {
+        throw new Error('Post not found');
+      }
 
-      const reactions = { ...post.reactions } || {};
+      const post = postDoc.data() as BlogPost;
+      const reactions = { ...(post.reactions || {}) };
       
       if (reactions[clientId] === emoji) {
         delete reactions[clientId];
@@ -110,10 +134,12 @@ export function useBlogPosts() {
         reactions[clientId] = emoji;
       }
 
+      // Only update the reactions field
       await updateDoc(postRef, { reactions });
     } catch (err) {
       console.error('Error toggling reaction:', err);
-      throw new Error('Failed to toggle reaction');
+      // Don't throw error for reactions to prevent disrupting the user experience
+      // Instead, we'll just log it and let the UI stay in sync with the server state
     }
   };
 

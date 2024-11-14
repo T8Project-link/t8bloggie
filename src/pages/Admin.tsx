@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Save, X } from 'lucide-react';
+import { Save, X, AlertTriangle } from 'lucide-react';
 import { useBlogPosts } from '../hooks/useBlogPosts';
 import BlogPost from '../components/BlogPost';
 import type { BlogPost as BlogPostType } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Admin() {
   const { addPost, posts, deletePost, updatePost, toggleReaction } = useBlogPosts();
@@ -10,6 +12,9 @@ export default function Admin() {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [editingPost, setEditingPost] = useState<BlogPostType | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { user, deleteAccount } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +54,15 @@ export default function Admin() {
     setTitle('');
     setContent('');
     setImageUrl('');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount();
+      navigate('/');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+    }
   };
 
   return (
@@ -134,6 +148,44 @@ export default function Admin() {
             {editingPost ? 'Update Post' : 'Publish Post'}
           </button>
         </form>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Account Settings</h2>
+        <div className="border-t pt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-red-600">Delete Account</h3>
+              <p className="text-sm text-gray-500">
+                This action cannot be undone. All your posts will be permanently deleted.
+              </p>
+            </div>
+            {!showDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Delete Account
+              </button>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                >
+                  Confirm Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-8">

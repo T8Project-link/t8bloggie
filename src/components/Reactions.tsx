@@ -34,7 +34,7 @@ export default function Reactions({ reactions, onToggleReaction }: ReactionsProp
           <button
             key={emoji}
             onClick={() => onToggleReaction(emoji)}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm ${
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-colors ${
               isSelected
                 ? 'bg-indigo-100 text-indigo-700'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
